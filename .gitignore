@@ -1,0 +1,18 @@
+# Rust build artifacts
+/target/
+
+# Rustfmt backups
+**/*.rs.bk
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Editor folders
+.vscode/
+.idea/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
