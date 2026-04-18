@@ -11,8 +11,13 @@ path = "src/radar-binance.rs"
 name = "radar-okx"
 path = "src/radar-okx.rs"
 
+[[bin]]
+name = "radar-huobi"
+path = "src/radar-huobi.rs"
+
 [dependencies]
 chrono = "0.4"
+flate2 = "1"
 futures-util = "0.3"
 rust_decimal = "1"
 serde_json = "1"
