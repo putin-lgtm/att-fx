@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use std::env;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-const WS_URL: &str = "wss://wspap.okx.com:8443/ws/v5/public";
+const WS_URL: &str = "wss://api.dydx.exchange/v3/ws";
 const DEFAULT_SYMBOL: &str = "solusdt";
 
 fn extract_level(side: &Value, index: usize) -> Option<(&str, &str)> {
@@ -77,8 +77,8 @@ fn log_event(payload: &str) {
         return;
     };
 
-    if let Some(event) = value.get("event").and_then(Value::as_str) {
-        eprintln!("okx event: {}", event);
+    if let Some(event) = value.get("type").and_then(Value::as_str) {
+        eprintln!("dydx event: {}", event);
     }
 }
 
@@ -88,7 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nth(1)
         .unwrap_or_else(|| DEFAULT_SYMBOL.to_string())
         .to_lowercase();
-    let inst_id = to_okx_inst_id(&symbol);
+    let _inst_id = to_okx_inst_id(&symbol);
 
     let (ws_stream, response) = connect_async(WS_URL).await?;
     eprintln!("connected: {} {}", response.status(), WS_URL);
@@ -97,11 +97,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (mut write, mut read) = ws_stream.split();
 
     let subscribe_message = json!({
-        "op": "subscribe",
-        "args": [{
-            "channel": "tickers",
-            "instId": inst_id
-        }]
+        "type": "subscribe",
+        "channel": "v3_markets"
     });
 
     write

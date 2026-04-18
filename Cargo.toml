@@ -15,6 +15,78 @@ path = "src/jameswebb-okx.rs"
 name = "jameswebb-huobi"
 path = "src/jameswebb-huobi.rs"
 
+[[bin]]
+name = "jameswebb-bybit"
+path = "src/jameswebb-bybit.rs"
+
+[[bin]]
+name = "jameswebb-coinbase"
+path = "src/jameswebb-coinbase.rs"
+
+[[bin]]
+name = "jameswebb-kraken"
+path = "src/jameswebb-kraken.rs"
+
+[[bin]]
+name = "jameswebb-bitget"
+path = "src/jameswebb-bitget.rs"
+
+[[bin]]
+name = "jameswebb-gateio"
+path = "src/jameswebb-gateio.rs"
+
+[[bin]]
+name = "jameswebb-mexc"
+path = "src/jameswebb-mexc.rs"
+
+[[bin]]
+name = "jameswebb-bitfinex"
+path = "src/jameswebb-bitfinex.rs"
+
+[[bin]]
+name = "jameswebb-upbit"
+path = "src/jameswebb-upbit.rs"
+
+[[bin]]
+name = "jameswebb-bitstamp"
+path = "src/jameswebb-bitstamp.rs"
+
+[[bin]]
+name = "jameswebb-crypto-com"
+path = "src/jameswebb-crypto-com.rs"
+
+[[bin]]
+name = "jameswebb-phemex"
+path = "src/jameswebb-phemex.rs"
+
+[[bin]]
+name = "jameswebb-dydx"
+path = "src/jameswebb-dydx.rs"
+
+[[bin]]
+name = "jameswebb-uniswap-v3"
+path = "src/jameswebb-uniswap-v3.rs"
+
+[[bin]]
+name = "jameswebb-gmx"
+path = "src/jameswebb-gmx.rs"
+
+[[bin]]
+name = "jameswebb-1inch"
+path = "src/jameswebb-1inch.rs"
+
+[[bin]]
+name = "jameswebb-serum"
+path = "src/jameswebb-serum.rs"
+
+[[bin]]
+name = "jameswebb-jupiter"
+path = "src/jameswebb-jupiter.rs"
+
+[[bin]]
+name = "jameswebb-pancakeswap"
+path = "src/jameswebb-pancakeswap.rs"
+
 [dependencies]
 chrono = "0.4"
 flate2 = "1"

@@ -1,4 +1,4 @@
-use att_fx::market::{format_price, normalize_price, split_symbol, to_okx_inst_id};
+use att_fx::market::{format_price, normalize_price, split_symbol};
 use chrono::Local;
 use futures_util::{SinkExt, StreamExt};
 use rust_decimal::Decimal;
@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use std::env;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-const WS_URL: &str = "wss://wspap.okx.com:8443/ws/v5/public";
+const WS_URL: &str = "wss://ws.kraken.com";
 const DEFAULT_SYMBOL: &str = "solusdt";
 
 fn extract_level(side: &Value, index: usize) -> Option<(&str, &str)> {
@@ -29,12 +29,8 @@ fn extract_price(payload: &str) -> Option<Decimal> {
         return None;
     };
 
-    let best_bid = book
-        .get("bids")
-        .and_then(|bids| extract_level(bids, 0));
-    let best_ask = book
-        .get("asks")
-        .and_then(|asks| extract_level(asks, 0));
+    let best_bid = book.get("bids").and_then(|bids| extract_level(bids, 0));
+    let best_ask = book.get("asks").and_then(|asks| extract_level(asks, 0));
 
     let price = match (best_bid, best_ask) {
         (_, Some((ask_price, ask_size))) if ask_size != "0" => ask_price,
@@ -77,8 +73,17 @@ fn log_event(payload: &str) {
         return;
     };
 
-    if let Some(event) = value.get("event").and_then(Value::as_str) {
-        eprintln!("okx event: {}", event);
+    if let Some(event) = value.get("event") {
+        eprintln!("kraken event: {}", event);
+    }
+}
+
+fn to_kraken_pair(symbol: &str) -> String {
+    let (base, quote) = split_symbol(symbol);
+    if quote.is_empty() {
+        symbol.to_uppercase()
+    } else {
+        format!("{}/{}", base.to_uppercase(), quote.to_uppercase())
     }
 }
 
@@ -88,7 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nth(1)
         .unwrap_or_else(|| DEFAULT_SYMBOL.to_string())
         .to_lowercase();
-    let inst_id = to_okx_inst_id(&symbol);
+    let pair = to_kraken_pair(&symbol);
 
     let (ws_stream, response) = connect_async(WS_URL).await?;
     eprintln!("connected: {} {}", response.status(), WS_URL);
@@ -97,11 +102,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (mut write, mut read) = ws_stream.split();
 
     let subscribe_message = json!({
-        "op": "subscribe",
-        "args": [{
-            "channel": "tickers",
-            "instId": inst_id
-        }]
+        "event": "subscribe",
+        "pair": [pair],
+        "subscription": {
+            "name": "ticker"
+        }
     });
 
     write
