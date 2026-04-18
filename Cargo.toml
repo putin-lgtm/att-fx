@@ -4,16 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "radar-binance"
-path = "src/radar-binance.rs"
+name = "jameswebb-binance"
+path = "src/jameswebb-binance.rs"
 
 [[bin]]
-name = "radar-okx"
-path = "src/radar-okx.rs"
+name = "jameswebb-okx"
+path = "src/jameswebb-okx.rs"
 
 [[bin]]
-name = "radar-huobi"
-path = "src/radar-huobi.rs"
+name = "jameswebb-huobi"
+path = "src/jameswebb-huobi.rs"
 
 [dependencies]
 chrono = "0.4"
