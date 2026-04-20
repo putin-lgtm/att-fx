@@ -1,0 +1,8 @@
+Trước hết dọn process cũ nếu còn sót:
+Get-Process ccp_app -ErrorAction SilentlyContinue | Stop-Process -Force
+Sau đó build lại:
+cmake --build .\ccp\build --config Debug --target run_ccp_app
+Rồi chạy app:
+cmake --build .\ccp\build --config Debug --target run_ccp_app
+Nhìn logs:
+Get-Content binance_ticker.log -Wait -Tail 20
