@@ -5,7 +5,9 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -35,6 +37,45 @@ BOOL WINAPI handle_console_signal(DWORD signal) {
 
 std::string make_error_json(const std::string& message) {
 	return std::string("{\"status\":\"error\",\"message\":\"") + message + "\"}";
+}
+
+std::string make_log_prefix() {
+	const auto now = std::chrono::system_clock::now();
+	const auto now_time = std::chrono::system_clock::to_time_t(now);
+	std::tm local_time{};
+#ifdef _WIN32
+	localtime_s(&local_time, &now_time);
+#else
+	localtime_r(&now_time, &local_time);
+#endif
+
+	const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+		now.time_since_epoch()
+	) % 1000;
+
+	std::ostringstream builder;
+	builder << '['
+			<< std::put_time(&local_time, "%Y-%m-%d:%H:%M:%S")
+			<< ':' << std::setw(3) << std::setfill('0') << milliseconds.count()
+			<< " mms] ";
+	return builder.str();
+}
+
+std::string make_synthetic_tick(uint64_t sequence) {
+	const double base_price = 75000.0 + static_cast<double>(sequence % 200) * 0.25;
+	const double bid_price = base_price - 0.01;
+	const double ask_price = base_price + 0.01;
+	const double volume = 14000.0 + static_cast<double>((sequence * 17) % 1000) / 10.0;
+
+	std::ostringstream builder;
+	builder << std::fixed << std::setprecision(8)
+			<< "{\"kind\":\"synthetic_ticker\","
+			<< "\"seq\":" << sequence << ','
+			<< "\"c\":\"" << base_price << "\"," 
+			<< "\"b\":\"" << bid_price << "\"," 
+			<< "\"a\":\"" << ask_price << "\"," 
+			<< "\"v\":\"" << volume << "\"}";
+	return builder.str();
 }
 
 std::string extract_json_string_field(std::string_view payload, std::string_view key) {
@@ -85,28 +126,45 @@ int fetch_binance_ticker() {
 
 	std::atomic<uint64_t> next_connection_id{0};
 	std::atomic<uint64_t> open_connections{0};
-	std::atomic<uint64_t> received_messages{0};
+	std::atomic<uint64_t> inbound_messages{0};
+	std::atomic<uint64_t> published_messages{0};
+	std::atomic<uint64_t> synthetic_sequence{0};
 	std::atomic<bool> listen_failed{false};
 	std::atomic<bool> server_ready{false};
+	std::mutex latest_message_mutex;
+	std::string latest_message;
+	uWS::Loop *app_loop = nullptr;
+	us_listen_socket_t *listen_socket = nullptr;
+	uWS::App app;
 
-	std::thread heartbeat([&]() {
-		uint64_t heartbeat_count = 0;
+	std::thread synthetic_publisher([&]() {
 		while (!g_stop_requested.load()) {
-			std::this_thread::sleep_for(std::chrono::seconds(1));
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 			if (g_stop_requested.load()) {
 				break;
 			}
 
-			std::cerr << "[uWS] heartbeat=" << ++heartbeat_count
-					  << " connections=" << open_connections.load()
-					  << " messages=" << received_messages.load()
-					  << " endpoint=ws://127.0.0.1:9001"
-					  << '\n';
-			std::cerr.flush();
+			if (!server_ready.load() || app_loop == nullptr) {
+				continue;
+			}
+
+			const std::string payload = make_synthetic_tick(++synthetic_sequence);
+			app_loop->defer([&app, &published_messages, &latest_message, &latest_message_mutex, payload]() {
+				app.publish("synthetic", payload, uWS::OpCode::TEXT, false);
+				++published_messages;
+				{
+					std::lock_guard<std::mutex> guard(latest_message_mutex);
+					latest_message = payload;
+				}
+				std::cerr << make_log_prefix() << "latest=" << payload << '\n';
+				std::cerr.flush();
+			});
 		}
 	});
 
-	uWS::App()
+	app_loop = uWS::Loop::get();
+
+	app
 		.get("/health", [](auto *res, auto */*req*/) {
 			res->end("ok");
 		})
@@ -123,18 +181,25 @@ int fetch_binance_ticker() {
 				auto *data = ws->getUserData();
 				data->connection_id = ++next_connection_id;
 				++open_connections;
+				ws->subscribe("synthetic");
 
-				std::cerr << "[uWS] open connection_id=" << data->connection_id
-						  << " active=" << open_connections.load() << '\n';
+				std::cerr << make_log_prefix() << "open connection_id=" << data->connection_id
+					  << " active=" << open_connections.load()
+					  << " auto_subscribed=synthetic" << '\n';
 				std::cerr.flush();
 			},
 			.message = [&](auto *ws, std::string_view message, uWS::OpCode opCode) {
-				++received_messages;
+				++inbound_messages;
 
-				std::cerr << "[uWS] message connection_id=" << ws->getUserData()->connection_id
+				std::cerr << make_log_prefix() << "message connection_id=" << ws->getUserData()->connection_id
 						  << " size=" << message.size()
 						  << " payload=" << message << '\n';
 				std::cerr.flush();
+
+				if (message == "ping") {
+					ws->send("pong", uWS::OpCode::TEXT, false);
+					return;
+				}
 
 				ws->send(message, opCode, false);
 			},
@@ -146,31 +211,33 @@ int fetch_binance_ticker() {
 					--open_connections;
 				}
 
-				std::cerr << "[uWS] close connection_id=" << ws->getUserData()->connection_id
+				std::cerr << make_log_prefix() << "close connection_id=" << ws->getUserData()->connection_id
 						  << " code=" << code
 						  << " reason=" << message
 						  << " active=" << open_connections.load() << '\n';
 				std::cerr.flush();
 			}
 		})
-		.listen(9001, [&](auto *listen_socket) {
-			if (listen_socket) {
+		.listen(9001, [&](auto *socket) {
+			if (socket) {
+				listen_socket = socket;
 				server_ready.store(true);
-				std::cerr << "[uWS] listening on ws://127.0.0.1:9001" << '\n';
-				std::cerr << "[uWS] health check: http://127.0.0.1:9001/health" << '\n';
+				std::cerr << make_log_prefix() << "listening on ws://127.0.0.1:9001" << '\n';
+				std::cerr << make_log_prefix() << "health check: http://127.0.0.1:9001/health" << '\n';
+				std::cerr << make_log_prefix() << "auto-publishing synthetic ticks once per second on topic 'synthetic'" << '\n';
 				std::cerr.flush();
 			} else {
 				listen_failed.store(true);
 				g_stop_requested.store(true);
-				std::cerr << "[uWS] failed to listen on port 9001" << '\n';
+				std::cerr << make_log_prefix() << "failed to listen on port 9001" << '\n';
 				std::cerr.flush();
 			}
 		})
 		.run();
 
 	g_stop_requested.store(true);
-	if (heartbeat.joinable()) {
-		heartbeat.join();
+	if (synthetic_publisher.joinable()) {
+		synthetic_publisher.join();
 	}
 
 #ifdef _WIN32
