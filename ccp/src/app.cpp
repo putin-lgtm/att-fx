@@ -156,7 +156,7 @@ int fetch_binance_ticker() {
 					std::lock_guard<std::mutex> guard(latest_message_mutex);
 					latest_message = payload;
 				}
-				std::cerr << make_log_prefix() << "latest=" << payload << '\n';
+				std::cerr << make_log_prefix() << "" << payload << '\n';
 				std::cerr.flush();
 			});
 		}
